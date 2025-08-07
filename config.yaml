@@ -1,0 +1,3 @@
+paths:
+  mcq_dataset: "dataset/mcq"
+  hme_dataset: "dataset/hme"
