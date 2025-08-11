@@ -1,297 +1,297 @@
-from model.model_architecture import MCQClusteringNet
+"""Base MCQ model that is purely trained on classification task.
 
-#!/usr/bin/env python3
-import os
-import argparse
+The clustering is done on the Hellinger transformation of the generated probabilities.
+"""
+import argparse, os
+from collections import Counter
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import OneCycleLR
-from torch.utils.data import DataLoader, ConcatDataset
-from torchvision import datasets, transforms, models
-from torchvision.models import resnet18, resnet34, ResNet34_Weights, ResNet18_Weights
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
+import torch.nn.functional as F
+from torch import Tensor
 from tqdm import tqdm
 
+from sklearn.cluster import KMeans
 
-# ─── Helpers ────────────────────────────────────────────────────────
-def filter_imagefolder(ds, allowed):
-    new_mapping = {c: i for i, c in enumerate(allowed)}
-    filtered = []
-    for path, _ in ds.samples:
-        cls = os.path.basename(os.path.dirname(path))
-        if cls in allowed:
-            filtered.append((path, new_mapping[cls]))
-    ds.samples = filtered
-    ds.targets = [lbl for _, lbl in filtered]
-    ds.classes = allowed
-    ds.class_to_idx = new_mapping
+from model.model_architecture import (
+    MCQClusteringNet1,
+)
+
+from PIL import Image
+# ---------------------------- Config for labels ----------------------------
+# We want: A,B,C,D,E,F,a,b,d,e,f  (11 classes) with c merged into C.
+CANONICAL = ["A", "B", "C", "D", "E", "F", "a", "b", "d", "e", "f"]
+MERGE_TO_CANON = {**{c: c for c in CANONICAL}, "c": "C"}
+NUM_CLASSES = len(CANONICAL)  # 11
+
+
+# ---------------------------- Dataset utils ----------------------------
+def label_to_char_map(ds) -> dict[int, str]:
+    """Build a label to character mapping for an EMNIST dataset.
+
+    EMNIST stores a `mapping` array that links each class index to a Unicode
+    code point for the corresponding character (digit, uppercase letter, or lowercase letter).
+
+    This function reads the last column of `ds.mapping` (if 2D) or the entire
+    array (if 1D) and converts each code point to its actual character.
+
+    Args:
+        ds (torchvision.datasets.EMNIST):
+            An EMNIST dataset object (any split: ByClass, ByMerge, Letters, etc.).
+
+    Returns:
+        Dictionary where keys are integer class indices (0, 1, 2, ...)
+        and values are the corresponding characters.
+    """
+    inv = {v: k for k, v in ds.class_to_idx.items()}
+    return {i: str(inv[i]) for i in range(len(inv))}
+
+
+def filter_and_remap(ds):
+    """Keep only characters in CANONICAL plus lowercase 'c' (so we can merge 'c' and 'C'),
+    then remap labels to 0..len(CANONICAL)-1 in CANONICAL order.
+
+    This function MUTATES `ds.data` and `ds.targets` in place and returns `ds`.
+
+    Args:
+        ds (torchvision.datasets.EMNIST): Any EMNIST split.
+
+    Returns:
+        torchvision.datasets.EMNIST: The same dataset object with filtered samples and remapped targets.
+    """
+    # Build label to char mapping from dataset
+    id2ch = label_to_char_map(ds)
+
+    # Build the keep set and a char to new_index lookup
+    keep_chars = set(CANONICAL) | {"c"}
+    ch2new = {ch: i for i, ch in enumerate(CANONICAL)}
+
+    # Compute mask of samples to keep
+    targets_cpu = ds.targets.cpu()
+    keep_mask = torch.tensor(
+        [id2ch[int(t)] in keep_chars for t in targets_cpu],
+        dtype=torch.bool,
+        device=targets_cpu.device,
+    )
+
+    # Filter images
+    ds.data = ds.data[keep_mask]
+
+    # Remap targets with merging (e.g., 'c' -> 'C') then to 0..K-1 via ch2new
+    new_targets = []
+    for t in targets_cpu[keep_mask].tolist():
+        ch = id2ch[int(t)]
+        ch_can = MERGE_TO_CANON.get(ch, ch)  # merge if needed
+        new_targets.append(ch2new[ch_can])
+
+    ds.targets = torch.tensor(new_targets, dtype=torch.long, device=targets_cpu.device)
+
+    # Sanity check
+    num_classes = len(CANONICAL)
+    assert ds.targets.min().item() == 0 and ds.targets.max().item() == num_classes - 1
+
     return ds
 
-
-class CombinedDataset(ConcatDataset):
-    """Merge upper+lower, offsetting lower-labels by len(upper)."""
-
-    def __init__(self, up_ds, lo_ds):
-        super().__init__([up_ds, lo_ds])
-        self.num_up = len(up_ds.classes)
-        self.classes = up_ds.classes + lo_ds.classes
-        self.class_to_idx = {c: i for i, c in enumerate(self.classes)}
-
-    def __getitem__(self, idx):
-        if idx < self.cumulative_sizes[0]:
-            return self.datasets[0][idx]
-        img, lbl = self.datasets[1][idx - self.cumulative_sizes[0]]
-        return img, lbl + self.num_up
+# ---------------------------- Metrics ----------------------------
+def purity_score(y_true, y_pred):
+    counts = {}
+    for t, p in zip(y_true, y_pred):
+        counts.setdefault(int(p), Counter())
+        counts[int(p)][int(t)] += 1
+    return sum(max(c.values()) for c in counts.values()) / len(y_true)
 
 
-# ─── Main ────────────────────────────────────────────────────────────
+def cluster_kmeans_probs(
+    model: nn.Module,
+    dl: DataLoader,
+    device: torch.device,
+    n_clusters: int = 11,
+    tau: float = 1.0,
+):
+    """Perform KMeans clustering on model output probabilities (with Hellinger transformation).
+
+    This function:
+      1. Runs the given model on a data loader to collect class probability distributions
+         (softmax over logits, with optional temperature scaling).
+      2. Applies a Hellinger mapping (`sqrt(probs)`) to map probability vectors to the
+         Hellinger space, improving Euclidean separability for clustering.
+      3. Runs KMeans with a fixed number of clusters.
+
+    Args:
+        ----------
+        model: A PyTorch model that, when called, returns (embedding, logits) for an input batch.
+        dl: torch.utils.data.DataLoader
+            DataLoader providing `(input_tensor, label)` pairs.
+        device: Device on which to run model inference (`"cpu"` or `"cuda"`).
+        n_clusters: Number of clusters to form in KMeans.
+        tau: Temperature parameter for softmax scaling. Values < 1 sharpen the distribution,
+            values > 1 soften it.
+
+    Returns
+    -------
+    y_true : np.ndarray of shape (N,)
+        Ground-truth labels collected from the dataset.
+    y_pred : np.ndarray of shape (N,)
+        Predicted cluster assignments from KMeans.
+
+    Notes
+    -----
+    - The Hellinger mapping (`sqrt(probs)`) transforms probability distributions so that
+      Euclidean distance better approximates their similarity, improving KMeans performance.
+    - Assumes the model's forward pass returns a tuple `(embedding, logits)`.
+    - The temperature scaling is applied before softmax: `softmax(logits / tau)`.
+    """
+    model.eval()
+    Ps, y_true = [], []
+    with torch.no_grad():
+        for xb, yb in dl:
+            xb = xb.to(device)
+            # logits: (Batch, Class)
+            logits = model(xb)
+            # dim = 1: apply softmax across class dimension (so probabilities across class sums to 1)
+            probs = torch.softmax(logits / tau, dim=1).cpu().numpy()
+            Ps.append(probs)
+            y_true.append(yb.numpy())
+
+    P = np.vstack(Ps)  # (N, C)
+    Phi = np.sqrt(np.clip(P, 1e-12, 1.0))  # Hellinger map
+
+    km = KMeans(n_clusters=n_clusters, n_init=10, random_state=0)
+    y_pred = km.fit_predict(Phi)
+
+    return np.concatenate(y_true), y_pred
+
+
+# ---------------------------- Main script ----------------------------
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data_root", default="dataset")
-    parser.add_argument("--img_size", type=int, default=64)
-    parser.add_argument("--batch_size", type=int, default=512)
-    parser.add_argument("--pre_epochs", type=int, default=20)
-    parser.add_argument("--epochs", type=int, default=30)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--patience", type=int, default=10)
-    parser.add_argument(
-        "--device", default="cuda" if torch.cuda.is_available() else "cpu"
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data_root", default="dataset")
+    ap.add_argument("--img_size", type=int, default=64)
+    ap.add_argument("--batch_size", type=int, default=256)
+    ap.add_argument("--epochs", type=int, default=40)
+    ap.add_argument("--lr", type=float, default=5 * 1e-4)
+    ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    args = ap.parse_args()
+
+    # derotate because EMNIST raw dataset is rotated
+    rotation_fix = transforms.Lambda(
+        lambda img: img.rotate(-90, expand=True).transpose(
+            Image.Transpose.FLIP_LEFT_RIGHT
+        )
     )
-    args = parser.parse_args()
 
-    # Define class sets
-    up_allowed = [chr(c) for c in range(ord("A"), ord("F") + 1)]
-    lo_allowed = [chr(c) for c in range(ord("a"), ord("f") + 1)]
-    lo_allowed.remove("c")
-
-
+    # Transforms
     train_tf = transforms.Compose(
         [
+            rotation_fix,
             transforms.Grayscale(1),
             transforms.Resize((args.img_size, args.img_size)),
             transforms.RandomAffine(
-                45, translate=(0.2, 0.2), scale=(0.7, 1.3), shear=30
+                30, translate=(0.1, 0.15), scale=(0.7, 1.3), shear=30
             ),
             transforms.RandomApply(
                 [transforms.ColorJitter(brightness=0.3, contrast=0.3)], p=0.5
             ),
-            transforms.RandomChoice(
-                [
-                    transforms.GaussianBlur(kernel_size=3),
-                    transforms.RandomAdjustSharpness(sharpness_factor=2),
-                ],
-                p=[0.3, 0.3],
+            transforms.RandomApply([transforms.GaussianBlur(kernel_size=3)], p=0.3),
+            transforms.RandomApply(
+                [transforms.RandomAdjustSharpness(sharpness_factor=2)], p=0.3
             ),
-            transforms.RandomPerspective(distortion_scale=0.4, p=0.3),
+            transforms.RandomPerspective(distortion_scale=0.2, p=0.3),
             transforms.ToTensor(),
-            transforms.Normalize((0.5,), (0.5,)),
-            transforms.RandomErasing(p=0.7, scale=(0.03, 0.15), value="random"),
+            transforms.RandomErasing(p=0.3, scale=(0.02, 0.06), value="random"),
+            transforms.Normalize(0.5, 0.5),
         ]
     )
-
     val_tf = transforms.Compose(
         [
+            rotation_fix,
             transforms.Grayscale(1),
             transforms.Resize((args.img_size, args.img_size)),
             transforms.ToTensor(),
-            transforms.Normalize((0.5,), (0.5,)),
+            transforms.Normalize(0.5, 0.5),
         ]
     )
 
-    # ─── Phase 1: EMNIST pre-training ────────────────────────────────
-    emnist_train = datasets.EMNIST(
-        root=args.data_root,
-        split="letters",
-        train=True,
-        download=True,
-        transform=train_tf,
-        target_transform=lambda t: t - 1,
+    # Data: use byclass to get uppercase+lowercase
+    tr = datasets.EMNIST(
+        args.data_root, split="byclass", train=True, download=True, transform=train_tf
     )
-    emnist_val = datasets.EMNIST(
-        root=args.data_root,
-        split="letters",
-        train=False,
-        download=True,
-        transform=val_tf,
-        target_transform=lambda t: t - 1,
-    )
-    emnist_tr_ld = DataLoader(
-        emnist_train,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=4,
-        pin_memory=True,
-        persistent_workers=True,
-        prefetch_factor=2,
-    )
-    emnist_vl_ld = DataLoader(
-        emnist_val,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True,
-        persistent_workers=True,
-        prefetch_factor=2,
+    vl = datasets.EMNIST(
+        args.data_root, split="byclass", train=False, download=True, transform=val_tf
     )
 
-    # ─── Phase 2: Custom A–F/a–f dataset ─────────────────────────────
-    def load_and_filter(case, split):
-        root = os.path.join(args.data_root, case, split)
-        ds = datasets.ImageFolder(
-            root, transform=(train_tf if split == "train" else val_tf)
-        )
-        return filter_imagefolder(ds, up_allowed if case == "upper" else lo_allowed)
+    # get only A-F and a-f (merge 'C' and 'c')
+    tr = filter_and_remap(tr)
+    vl = filter_and_remap(vl)
 
-    up_tr, up_val, up_te = [
-        load_and_filter("upper", s) for s in ("train", "validation", "test")
-    ]
-    lo_tr, lo_val, lo_te = [
-        load_and_filter("lower", s) for s in ("train", "validation", "test")
-    ]
-    train_ds = CombinedDataset(up_tr, lo_tr)
-    val_ds = CombinedDataset(up_val, lo_val)
-    test_ds = CombinedDataset(up_te, lo_te)
-    train_ld = DataLoader(
-        train_ds,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=4,
-        pin_memory=True,
-        persistent_workers=True,
-        prefetch_factor=2,
+    tr_ld = DataLoader(
+        tr, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True
     )
-    val_ld = DataLoader(
-        val_ds,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True,
-        persistent_workers=True,
-        prefetch_factor=2,
-    )
-    test_ld = DataLoader(
-        test_ds,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True,
-        persistent_workers=True,
-        prefetch_factor=2,
+    vl_ld = DataLoader(
+        vl, batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True
     )
 
+    # load model architecture
     device = torch.device(args.device)
+    model = MCQClusteringNet1(out_classes=NUM_CLASSES).to(device)
 
-    # ====== Load model architecture ====
-    model = MCQClusteringNet()
-    model = model.to(device)
-    
+    # define what to optimize and how
     criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
-
-    # -- 1) Pre-train head on EMNIST (26 classes)
-    # model.fc = nn.Linear(model.fc.in_features, 26).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-6)
     scheduler = OneCycleLR(
-        optimizer,
-        max_lr=args.lr * 10,
-        epochs=args.pre_epochs,
-        steps_per_epoch=len(emnist_tr_ld),
-        pct_start=0.3,
-        anneal_strategy="cos",
-        div_factor=25.0,
-        final_div_factor=1e4,
+                        optimizer, max_lr=args.lr * 5, epochs=args.epochs, steps_per_epoch=len(tr_ld)
     )
-    for ep in range(1, args.pre_epochs + 1):
-        model.train()
-        for x, y in tqdm(
-            emnist_tr_ld, desc=f"EMNIST Train {ep}/{args.pre_epochs}", leave=False
-        ):
-            x, y = x.to(device), y.to(device)
-            optimizer.zero_grad()
-            loss = criterion(model(x), y)
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
-        model.eval()
-        correct = 0
-        for x, y in tqdm(emnist_vl_ld, desc="EMNIST Val", leave=False):
-            x, y = x.to(device), y.to(device)
-            correct += (model(x).argmax(1) == y).sum().item()
-        acc = correct / len(emnist_vl_ld.dataset)
-        print(f"[EMNIST] Epoch {ep}/{args.pre_epochs} · acc={acc:.4f}")
 
-    # -- 2) Fine-tune head on custom (11 classes) with layer freezing
-    # Freeze all backbone layers
-    for name, param in model.named_parameters():
-        if not name.startswith("fc"):
-            param.requires_grad = False
-    # Replace and train only the final head
-    model.fc = nn.Linear(in_features, 11).to(device)
-    # Use a lower learning rate for the head
-    optimizer = optim.Adam(
-        [{"params": model.fc.parameters(), "lr": args.lr * 0.1}], weight_decay=1e-6
-    )
-    scheduler = OneCycleLR(
-        optimizer,
-        max_lr=args.lr,
-        epochs=args.epochs,
-        steps_per_epoch=len(train_ld),
-        pct_start=0.3,
-        anneal_strategy="cos",
-        div_factor=25.0,
-        final_div_factor=1e4,
-    )
-    best_val = 0.0
-    no_imp = 0
+    # training
+    best_acc = 0.0
     for ep in range(1, args.epochs + 1):
+        # ---- train
         model.train()
-        # Unfreeze backbone after warm-up epoch 2
-        if ep == 3:
-            for name, param in model.named_parameters():
-                param.requires_grad = True
-            optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-6)
-            scheduler = OneCycleLR(
-                optimizer,
-                max_lr=args.lr * 10,
-                epochs=args.epochs - 2,
-                steps_per_epoch=len(train_ld),
-                pct_start=0.3,
-                anneal_strategy="cos",
-                div_factor=25.0,
-                final_div_factor=1e4,
-            )
-        for x, y in tqdm(train_ld, desc=f"Fine Train {ep}/{args.epochs}", leave=False):
+        for x, y in tqdm(tr_ld, desc=f"Train {ep}/{args.epochs}", leave=False):
             x, y = x.to(device), y.to(device)
             optimizer.zero_grad()
-            loss = criterion(model(x), y)
+            
+            logits = model(x)
+            loss = criterion(logits, y)
             loss.backward()
             optimizer.step()
             scheduler.step()
+
+        # ---- supervised accuracy (quick sanity)
         model.eval()
         correct = 0
-        for x, y in tqdm(val_ld, desc="Fine Val", leave=False):
-            x, y = x.to(device), y.to(device)
-            correct += (model(x).argmax(1) == y).sum().item()
-        acc = correct / len(val_ld.dataset)
-        print(f"[Fine] Epoch {ep}/{args.epochs} · val_acc={acc:.4f}")
-        if acc > best_val:
-            best_val = acc
-            no_imp = 0
-            torch.save(model.state_dict(), "model.pth")
-            print(f"  ▶ Saved best (acc={best_val:.4f})")
-        else:
-            no_imp += 1
-            if no_imp >= args.patience:
-                print(f"Stopping early after {no_imp} no-improve")
-                break
+        with torch.no_grad():
+            for x, y in tqdm(vl_ld, desc="Val", leave=False):
+                x = x.to(device)
+                logits = model(x)
+                preds = logits.argmax(1).cpu()
+                correct += (preds == y).sum().item()
+        acc = correct / len(vl_ld.dataset)
+        best_acc = max(best_acc, acc)
 
-    # ─── Test ─────────────────────────────────────────────────────
-    model.load_state_dict(torch.load("model.pth", map_location=device))
-    model.eval()
-    correct = 0
-    for x, y in tqdm(test_ld, desc="Test", leave=False):
-        x, y = x.to(device), y.to(device)
-        correct += (model(x).argmax(1) == y).sum().item()
-    print(f"Test acc: {correct/len(test_ld.dataset):.4f}")
+        y_true, y_pred = cluster_kmeans_probs(
+            model, vl_ld, device, n_clusters=NUM_CLASSES, tau=2.0
+        )
+        purity = purity_score(y_true, y_pred)
+        produced_k = len(np.unique(y_pred))
+        real_k = len(np.unique(y_true))
+
+        print(
+            f"[A-F/a-f (C/c merged)] Epoch {ep}/{args.epochs} | "
+            f"acc={acc:.4f} | purity={purity:.4f} | "
+            f"produced_k={produced_k} | real_k={real_k} | "
+        )
+
+    # Save final weight
+    os.makedirs("weights", exist_ok=True)
+    output_path = "weights/mcq_model.pth"
+    torch.save(model.state_dict(), output_path)
+    print(f"Saved final to {output_path}")
 
 
 if __name__ == "__main__":
