@@ -1,7 +1,10 @@
-"""Base MCQ model that is purely trained on classification task.
+"""Extension of MCQ model that also motivates intra-class compactness.
+
+The compactness is enforced by adding CenterLoss where
 
 The clustering is done on the Hellinger transformation of the generated probabilities.
 """
+
 import argparse, os
 from collections import Counter
 
@@ -19,10 +22,11 @@ from tqdm import tqdm
 from sklearn.cluster import KMeans
 
 from model.model_architecture import (
-    MCQClusteringNet1,
+    MCQClusteringNet2,
 )
 
 from PIL import Image
+
 # ---------------------------- Config for labels ----------------------------
 # We want: A,B,C,D,E,F,a,b,d,e,f  (11 classes) with c merged into C.
 CANONICAL = ["A", "B", "C", "D", "E", "F", "a", "b", "d", "e", "f"]
@@ -97,6 +101,72 @@ def filter_and_remap(ds):
 
     return ds
 
+
+# =========== Other helpers ===============
+class CenterLoss(nn.Module):
+    """Center Loss for improving feature discrimination.
+
+    This loss penalizes the Euclidean distance between the normalized feature
+    vectors of samples and their corresponding class centers, encouraging features
+    of the same class to cluster together on the unit hypersphere.
+
+    Args:
+        num_classes: Number of distinct classes.
+        feat_dim: Dimensionality of the feature vectors.
+        alpha: Scaling factor controlling the contribution of the center loss.
+
+    Notes
+    -----
+    - Centers are L2-normalized so that Euclidean distance approximates angular distance.
+    - Initialized with orthogonal vectors for a good starting spread.
+    - idea from: https://doi.org/10.1007/978-3-319-46478-7_31
+    """
+
+    def __init__(self, num_classes: int, feat_dim: int, alpha: float = 1.0):
+        super().__init__()
+        self.centers = nn.Parameter(
+            torch.randn(num_classes, feat_dim)
+        )  # make as trainable matrix
+        nn.init.orthogonal_(
+            self.centers
+        )  # init with maximum difference (based on cosine similarity)
+        self.alpha = alpha
+
+    def forward(self, feats: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        # Both feats and centers on the sphere -> Euclidean ~ angular
+        feats = F.normalize(feats, dim=1)
+        centers = F.normalize(self.centers, dim=1)
+
+        # get the centroids for each sample in the batch
+        c = centers.index_select(0, labels)  # (B, D)
+
+        # the loss is the scaled (self.alpha) mean squared distance between each sample and the centroid
+        return self.alpha * ((feats - c).pow(2).sum(dim=1)).mean()
+
+
+def compute_cosine_logits(model: nn.Module, emb: Tensor, s: float) -> Tensor:
+    """Compute cosine-similarity-based logits between input embeddings and classifier weights.
+
+    Normalizes both the embeddings and the classifier weights to unit length so the
+    dot product equals the cosine similarity, then scales the result by `s` to control
+    the logit magnitude for use in softmax classification.
+
+    Parameters
+    ----------
+    model : A model with `head.classifier.weight` as the class weight matrix.
+    emb : Input embedding vectors from the model backbone.
+    s : Scaling factor applied to the cosine similarity values.
+
+    Returns
+        Scaled cosine similarity logits of shape (batch_size, num_classes).
+    """
+    W = model.head.classifier.weight  # (num_classes, embed_dim)
+    emb_n = F.normalize(emb, dim=1)  # normalize embeddings to unit length
+    W_n = F.normalize(W, dim=1)  # normalize weights to unit length
+    logits = s * (emb_n @ W_n.t())  # cosine similarity × scale
+    return logits
+
+
 # ---------------------------- Metrics ----------------------------
 def purity_score(y_true, y_pred):
     counts = {}
@@ -152,7 +222,8 @@ def cluster_kmeans_probs(
         for xb, yb in dl:
             xb = xb.to(device)
             # logits: (Batch, Class)
-            logits = model(xb)
+            emb, _ = model(xb)
+            logits = compute_cosine_logits(model, emb, s=30)
             # dim = 1: apply softmax across class dimension (so probabilities across class sums to 1)
             probs = torch.softmax(logits / tau, dim=1).cpu().numpy()
             Ps.append(probs)
@@ -174,7 +245,7 @@ def main():
     ap.add_argument("--img_size", type=int, default=64)
     ap.add_argument("--batch_size", type=int, default=256)
     ap.add_argument("--epochs", type=int, default=40)
-    ap.add_argument("--lr", type=float, default=5 * 1e-4)
+    ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = ap.parse_args()
 
@@ -238,14 +309,29 @@ def main():
 
     # load model architecture
     device = torch.device(args.device)
-    model = MCQClusteringNet1(out_classes=NUM_CLASSES).to(device)
+    model = MCQClusteringNet2(out_classes=NUM_CLASSES).to(device)
 
-    # define what to optimize and how
+    # infer feature dimension once
+    with torch.no_grad():
+        x0, _ = next(iter(tr_ld))
+        emb0, _ = model(x0[:2].to(device))
+        feat_dim = emb0.shape[1]
+
+    center_loss = CenterLoss(NUM_CLASSES, feat_dim, alpha=1.0).to(device)
+
     criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
+
+    # Two optimizers: one for model, one for centers (small LR, no WD)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-6)
-    scheduler = OneCycleLR(
-                        optimizer, max_lr=args.lr * 5, epochs=args.epochs, steps_per_epoch=len(tr_ld)
+    optimizer_centers = optim.SGD(
+        center_loss.parameters(), lr=args.lr * 0.1, momentum=0.9, weight_decay=0.0
     )
+
+    scheduler = OneCycleLR(
+        optimizer, max_lr=args.lr * 5, epochs=args.epochs, steps_per_epoch=len(tr_ld)
+    )
+
+    lambda_c = 0.2
 
     # training
     best_acc = 0.0
@@ -255,11 +341,19 @@ def main():
         for x, y in tqdm(tr_ld, desc=f"Train {ep}/{args.epochs}", leave=False):
             x, y = x.to(device), y.to(device)
             optimizer.zero_grad()
-            
-            logits = model(x)
-            loss = criterion(logits, y)
+            optimizer_centers.zero_grad()
+
+            emb, _ = model(x)
+            logits = compute_cosine_logits(model, emb, s=30)
+
+            ce = criterion(logits, y)
+            cl = center_loss(emb, y)
+            loss = ce + lambda_c * cl
+
             loss.backward()
+
             optimizer.step()
+            optimizer_centers.step()
             scheduler.step()
 
         # ---- supervised accuracy (quick sanity)
@@ -268,7 +362,9 @@ def main():
         with torch.no_grad():
             for x, y in tqdm(vl_ld, desc="Val", leave=False):
                 x = x.to(device)
-                logits = model(x)
+                emb, _ = model(x)
+                logits = compute_cosine_logits(model, emb, s=30)
+
                 preds = logits.argmax(1).cpu()
                 correct += (preds == y).sum().item()
         acc = correct / len(vl_ld.dataset)
@@ -289,7 +385,7 @@ def main():
 
     # Save final weight
     os.makedirs("weights", exist_ok=True)
-    output_path = "weights/mcq_model.pth"
+    output_path = "weights/mcq_model_2.pth"
     torch.save(model.state_dict(), output_path)
     print(f"Saved final to {output_path}")
 
