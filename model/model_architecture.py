@@ -12,10 +12,8 @@ class MCQClusteringNet(nn.Module):
         1. Modifies conv1 in_channels from 3 to 1, so model is targeted for grayscale task.
         2. Changes last fully connected (fc) layer to outputs 11 classes, i,e A-F and a-f with
             'C' and 'c' merged.
-        3. Replaces AdaptiveAvgPooling to custom AttentionPooling.
-
-    Args:
-        out_features: How many labelled classes were involved in the training.
+        3. Replaces AdaptiveAvgPooling to custom AttentionPooling so more contributing weights
+            are given larger impacts
     """
 
     class _AttentionPooling(nn.Module):
