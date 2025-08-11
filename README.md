@@ -82,7 +82,7 @@ The MCQ pipeline has **two model variants**:
 
 | Variant   | Backbone                               | Representation            | EMNIST Purity | Custom Dataset Purity |
 | --------- | -------------------------------------- | ------------------------- | ------------- | --------------------- |
-| Version 1 | ResNet18 + AttentionPooling            | Probabilities (Hellinger) | TBD           | TBD                   |
+| Version 1 | ResNet18 + AttentionPooling            | Probabilities (Hellinger) | 0.9651           | 0.9751                   |
 | Version 2 | ResNet18 + ProjectionHead + CenterLoss | Embeddings (cosine similarity space)                | 0.9641           | 0.9751                   |
 
 
