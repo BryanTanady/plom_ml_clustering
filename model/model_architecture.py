@@ -116,8 +116,11 @@ class MCQClusteringNet2(nn.Module):
         1. Modifies conv1 in_channels from 3 to 1, so model is targeted for grayscale task.
         2. Changes last fully connected (fc) layer to outputs 11 classes, i,e A-F and a-f with
             'C' and 'c' merged.
-        3. Replaces AdaptiveAvgPooling to custom AttentionPooling so more contributing weights
-            are given larger impacts
+        3. Uses ProjectionHead, so there is an intermediate higher dimensional representation of
+            the features. The advantage compared to MCQClusteringNet1, is that we can do more
+            clustering-targeted optimization. For instance, we can do CenterLoss or perhaps
+            Contrastive Loss, such that the features are forced to pull same labeled data together
+            and push away different labels apart.
     """
 
     def __init__(self, out_classes):
