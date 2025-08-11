@@ -1,2 +1,5 @@
 *env
 dataset
+playground
+*pth
+*pycache*
