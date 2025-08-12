@@ -24,8 +24,8 @@ These systems are designed for integration with Plom's grading workflow, enablin
   * Agglomerative clustering with cosine distance or KMeans.
 * **Dataset:**
 
-  * Training/Validation: Custom collected handwritten math expressions dataset.
-  * Testing: Custom collected dataset for robust evaluation.
+  * Training/Validation:  [Mathwriting-2024](https://arxiv.org/abs/2404.10690).
+  * Testing: [CROHME 2019](https://tc11.cvc.uab.es/datasets/ICDAR2019-CROHME-TDF_1%7D) and custom collected dataset.
 
 ### 2. MCQ Clustering
 
@@ -97,5 +97,24 @@ Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
+
+### Prepare training data
+```bash
+python3 -m scripts.data_prep.hme #HME
+python3 -m scripts.data_prep.hme #MCQ
+```
+
+
+### Training (HME)
+```bash
+python3 -m training.HME_training 
+```
+
+### Training (MCQ)
+```bash
+python3 -m training.MCQ1_training.py # Trained purely for classification.
+python3 -m training.MCQ1_training.py # Trained with clustering in mind (CenterLoss).
+```
+
 
 ---
