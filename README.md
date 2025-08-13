@@ -1,6 +1,9 @@
 # plom\_ml\_clustering
 
-Machine Learning clustering model architectures and training for the [Plom](https://github.com/plomgrading/plom) grading system.
+Machine Learning clustering model architectures and training for the [Plom](https://github.com/plomgrading/plom) grading system. This repo **only** covers how to generate the models that generate embeddings, i.e the **red component** in the following diagram:
+<p align="center">
+  <img src="assets/inference_pipeline.png" width=800>
+</p>
 
 
 As of Aug 2025 supports:
@@ -28,10 +31,10 @@ A longer version: [extended demo]()
 | Aspect                     | Details |
 |----------------------------|---------|
 | **Goal**                   | Cluster handwritten math expressions by **structural and semantic content** |
-| **Model Architecture**     | ResNet-34 feature extractor + TrOCR encoder for symbolic representation |
-| **Training**               | Supervised training on symbol sequences; Loss: sequence prediction (via TrOCR) |
+| **Model Architecture**     | ResNet-34 feature extractor (HMESymbolicNet) + TrOCR encoder for symbolic representation (Public model) |
+| **Training**               | Supervised training on Multi-hot symbol labels with BCELogitLoss and weight shifted to rarer symbols for better long-tailed dataset |
 | **Representation**         | Pooled encoder embeddings, L2-normalized |
-| **Clustering Method**      | Agglomerative (cosine distance), KMeans on embeddings |
+| **Clustering Method**      | Agglomerative on  embeddings produced by both models |
 | **Datasets**               | **Train/Val:** [Mathwriting-2024](https://arxiv.org/abs/2404.10690) <br> **Test:** [CROHME 2019](https://tc11.cvc.uab.es/datasets/ICDAR2019-CROHME-TDF_1%7D), custom dataset |
 
 ---
@@ -46,7 +49,7 @@ A longer version: [extended demo]()
 | **Model Architecture**     | ResNet-18 backbone (ImageNet-pretrained, grayscale) + AttentionPooling + 11-class head |
 | **Training**               | Supervised classification; Loss: cross-entropy |
 | **Representation**         | Softmax probability vectors + optional temperature scaling + Hellinger transform |
-| **Clustering Method**      | KMeans (k=11), Agglomerative on probability vectors |
+| **Clustering Method**      |  Agglomerative on probability vectors |
 | **Datasets**               | **Train/Val:** [EMNIST ByClass](https://www.nist.gov/itl/products-and-services/emnist-dataset) filtered + augmentation <br> **Test:** Custom handwritten MCQ dataset |
 
 ### MCQ v2 — *Projection Head + Center Loss*
