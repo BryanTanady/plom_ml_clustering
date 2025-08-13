@@ -12,7 +12,7 @@ These systems are designed for integration with Plom's grading workflow, enablin
 
 ---
 
-## 👁️ Preview of Integration with Plom
+# 👁️ Preview of Integration with Plom
 <p align="center">
   <img src="assets/plom_preview.gif" width=800>
 </p>
@@ -21,7 +21,7 @@ A longer version: [extended demo]()
 
 ---
 
-"""# 🧠 Systems Overview
+# 🧠 Systems Overview
 
 ## **1️⃣ Handwritten Math Expression (HME) Clustering**
 
@@ -62,7 +62,7 @@ A longer version: [extended demo]()
 
 ---
 
-## 🚀 Getting Started
+# 🚀 Getting Started
 
 ### Prerequisites
 
@@ -92,7 +92,7 @@ python3 -m training.MCQ1_training.py # Trained with clustering in mind (CenterLo
 
 
 ---
-## 📥 Getting pretrained weights
+# 📥 Getting pretrained weights
 
 ### MCQ (V1)
 ```bash
@@ -106,7 +106,7 @@ python3 -m scripts.get_pretrained_weights.hme
 
 
 ---
-## 📥 Getting public model (and strip + quantize)
+# 📥 Getting public model (and strip + quantize)
 ### TrOCR 
 reference: [arXiv:2109.10282](arXiv:2109.10282)
 ```bash
