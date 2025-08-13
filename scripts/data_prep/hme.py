@@ -171,7 +171,7 @@ def generate_test_files_config(dataset_path, out_path):
         ):
             try:
                 extract_label(d)
-            except Exception as e:
+            except Exception:
                 continue
 
     count = Counter(result)
@@ -260,7 +260,7 @@ def render_inkml(dataset_path, test_config_path, out_path):
                 out_dir = f"{out_path}/{out_subdir}"
                 os.makedirs(out_dir, exist_ok=True)
                 img.save(f"{out_dir}/{fname.replace(".inkml", ".png")}")
-            except ET.ParseError as e:
+            except ET.ParseError:
                 print("Parse error: ", filepath)
                 continue
 

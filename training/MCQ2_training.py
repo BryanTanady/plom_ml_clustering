@@ -5,8 +5,8 @@ The compactness is enforced by adding CenterLoss where
 The clustering is done on the Hellinger transformation of the generated probabilities.
 """
 
-import argparse, os
-from collections import Counter
+import argparse
+import os
 
 import numpy as np
 import torch
@@ -16,7 +16,6 @@ from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 import torch.nn.functional as F
-from torch import Tensor
 from tqdm import tqdm
 
 from sklearn.cluster import KMeans
@@ -26,6 +25,7 @@ from model.model_architecture import (
 )
 
 from PIL import Image
+from utils.utils import purity_score, compute_cosine_logits
 
 # ---------------------------- Config for labels ----------------------------
 # We want: A,B,C,D,E,F,a,b,d,e,f  (11 classes) with c merged into C.
@@ -107,7 +107,7 @@ class CenterLoss(nn.Module):
     """Center Loss for improving feature discrimination.
 
     This loss penalizes the Euclidean distance between the normalized feature
-    vectors of samples and their corresponding class centers, encouraging features
+    vectors of samples and their corresponding (learned) class centers, encouraging features
     of the same class to cluster together on the unit hypersphere.
 
     Args:
@@ -144,36 +144,7 @@ class CenterLoss(nn.Module):
         return self.alpha * ((feats - c).pow(2).sum(dim=1)).mean()
 
 
-def compute_cosine_logits(model: nn.Module, emb: Tensor, s: float) -> Tensor:
-    """Compute cosine-similarity-based logits between input embeddings and classifier weights.
-
-    Normalizes both the embeddings and the classifier weights to unit length so the
-    dot product equals the cosine similarity, then scales the result by `s` to control
-    the logit magnitude for use in softmax classification.
-
-    Parameters
-    ----------
-    model : A model with `head.classifier.weight` as the class weight matrix.
-    emb : Input embedding vectors from the model backbone.
-    s : Scaling factor applied to the cosine similarity values.
-
-    Returns
-        Scaled cosine similarity logits of shape (batch_size, num_classes).
-    """
-    W = model.head.classifier.weight  # (num_classes, embed_dim)
-    emb_n = F.normalize(emb, dim=1)  # normalize embeddings to unit length
-    W_n = F.normalize(W, dim=1)  # normalize weights to unit length
-    logits = s * (emb_n @ W_n.t())  # cosine similarity × scale
-    return logits
-
-
 # ---------------------------- Metrics ----------------------------
-def purity_score(y_true, y_pred):
-    counts = {}
-    for t, p in zip(y_true, y_pred):
-        counts.setdefault(int(p), Counter())
-        counts[int(p)][int(t)] += 1
-    return sum(max(c.values()) for c in counts.values()) / len(y_true)
 
 
 def cluster_kmeans_probs(

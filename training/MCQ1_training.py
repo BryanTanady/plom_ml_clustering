@@ -3,7 +3,8 @@
 The clustering is done on the Hellinger transformation of the generated probabilities.
 """
 
-import argparse, os
+import argparse
+import os
 from collections import Counter
 
 import numpy as np
@@ -13,8 +14,6 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
-import torch.nn.functional as F
-from torch import Tensor
 from tqdm import tqdm
 
 from sklearn.cluster import KMeans

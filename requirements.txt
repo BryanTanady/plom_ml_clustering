@@ -1,0 +1,12 @@
+torch==2.8.0
+torchvision==0.23.0
+model==0.6.0
+numpy==2.3.2
+Pillow==11.3.0
+scikit_learn==1.7.1
+tqdm==4.67.1
+utils==1.0.2
+huggingface_hub==0.34.4
+Requests==2.32.4
+transformers==4.55.0
+

@@ -26,9 +26,8 @@ class _ProjectionHead(nn.Module):
             nn.ReLU(),
             nn.Linear(emb_dim, emb_dim),
         )
-        self.classifier = nn.Linear(emb_dim, num_classes)
+        self.classifier = nn.Linear(emb_dim, num_classes, bias=False)
         nn.init.normal_(self.classifier.weight, std=0.01)
-        nn.init.constant_(self.classifier.bias, 0)
 
     def forward(self, features: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         emb = self.projector(features)
@@ -164,18 +163,21 @@ class HMESymbolicNet(nn.Module):
     Current architecture: resnet34 + ProjectionHead.
     """
 
-    def __init__(self, out_classes: int = 229):
+    def __init__(self, emb_dim: int = 256, out_classes: int = 229):
         super().__init__()
         # resnet34 backbone
         backbone = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        backbone.conv1 = nn.Conv2d(
-            1, 64, kernel_size=7, stride=2, padding=3, bias=False
-        )
+        backbone.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3)
         backbone.fc = nn.Identity()
         self.backbone = backbone
 
+        self.classifier = nn.Linear(emb_dim, out_classes)
+
         # projection head
-        self.head = _ProjectionHead(in_dim=512, emb_dim=128, num_classes=out_classes)
+        self.head = _ProjectionHead(
+            in_dim=512, emb_dim=emb_dim, num_classes=out_classes
+        )
+        nn.init.constant_(self.classifier.bias, 0)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass through the HMESymbolicNet.

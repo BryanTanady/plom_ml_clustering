@@ -23,75 +23,105 @@ A longer version: [extended demo]()
 
 ## 🧠 Systems Overview
 
-### 1. HME Clustering
 
-* **Goal:** Cluster handwritten math expressions by their structural/semantic content.
-* **Model:** ResNet34 feature extractor + TrOCR encoder for symbolic representation.
-* **Clustering Strategy:**
 
-  * Embeddings from the encoder pooled and normalized.
-  * Agglomerative clustering with cosine distance or KMeans.
-* **Dataset:**
+### **1️⃣ Handwritten Math Expression (HME) Clustering**
 
-  * Training/Validation:  [Mathwriting-2024](https://arxiv.org/abs/2404.10690).
-  * Testing: [CROHME 2019](https://tc11.cvc.uab.es/datasets/ICDAR2019-CROHME-TDF_1%7D) and custom collected dataset.
+**Goal:**  
+Cluster handwritten math expressions by **structural and semantic content**.
 
-### 2. MCQ Clustering
+**Model Architecture:**  
+- ResNet-34 feature extractor  
+- TrOCR encoder for symbolic representation
 
-The MCQ pipeline has **two model variants**:
+**Training:**  
+- Supervised training on symbol sequences  
+- Loss: sequence prediction (via TrOCR)
 
-#### MCQ v1 — AttentionPooling + Classification Pretrain
+**Representation for Clustering:**  
+- Pooled encoder embeddings  
+- L2 normalization
 
-* **Architecture:**
+**Clustering Method:**  
+- Agglomerative clustering (cosine distance)  
+- KMeans on embeddings
 
-  * ResNet18 backbone (ImageNet-pretrained), grayscale input.
-  * Custom AttentionPooling layer replaces global average pooling.
-  * 11-class output head (A–F/a–f, with C/c merged).
-* **Training:**
-
-  * Purely supervised classification with cross-entropy.
-* **Clustering Representation:**
-
-  * Hellinger transformation of final softmax probabilities (optionally temperature-scaled).
-* **Clustering Method:**
-
-  * KMeans (k=11) or Agglomerative on probability vectors.
-
-#### MCQ v2 — Projection Head + Center Loss
-
-* **Architecture:**
-
-  * ResNet18 backbone without AttentionPooling.
-  * Projection head mapping features to a compact embedding space.
-* **Training:**
-
-  * Supervised classification with cross-entropy **plus Center Loss** to enforce intra-class compactness.
-* **Clustering Representation:**
-
-  * Final embeddings from projection head.
-* **Clustering Method:**
-
-  * KMeans (k=11) or Agglomerative on embeddings.
-
-**Dataset:**
-
-* Training/Validation: [EMNIST ByClass](https://www.nist.gov/itl/products-and-services/emnist-dataset), filtered for target classes, with augmentation for robustness.
-* Testing: Custom collected dataset of handwritten MCQ answers.
+**Datasets:**  
+- **Train/Validation:** [Mathwriting-2024](https://arxiv.org/abs/2404.10690)  
+- **Test:** [CROHME 2019](https://tc11.cvc.uab.es/datasets/ICDAR2019-CROHME-TDF_1%7D), custom dataset
 
 ---
+
+### **2️⃣ Multiple-Choice Question (MCQ) Clustering**
+
+### **MCQ v1 — AttentionPooling + Classification Pretrain**
+
+**Goal:**  
+Cluster handwritten MCQ answers by letter choice (A–F / a–f, with C/c merged).
+
+**Model Architecture:**  
+- ResNet-18 backbone (ImageNet-pretrained, grayscale input)  
+- Custom **AttentionPooling** replacing global average pooling  
+- 11-class classification head
+
+**Training:**  
+- Supervised classification with cross-entropy loss
+
+**Representation for Clustering:**  
+- Softmax probability vectors  
+- Hellinger transformation (optionally temperature-scaled)
+
+**Clustering Method:**  
+- KMeans (k=11)  
+- Agglomerative on probability vectors
+
+**Datasets:**  
+- **Train/Validation:** [EMNIST ByClass](https://www.nist.gov/itl/products-and-services/emnist-dataset), filtered to target classes with augmentation  
+- **Test:** Custom handwritten MCQ dataset
+
+---
+
+### **MCQ v2 — Projection Head + Center Loss**
+
+**Goal:**  
+Improve cluster purity via compact embedding space.
+
+**Model Architecture:**  
+- ResNet-18 backbone (no AttentionPooling)  
+- Projection head → low-dimensional embedding space
+
+**Training:**  
+- Cross-entropy classification loss  
+- Center Loss for intra-class compactness
+
+**Representation for Clustering:**  
+- Projection head embeddings (L2 normalized)
+
+**Clustering Method:**  
+- KMeans (k=11)  
+- Agglomerative on embeddings
+
+**Datasets:**  
+- **Train/Validation:** Same as MCQ v1  
+- **Test:** Same as MCQ v1
+
+---
+
 ## 📊 Evaluation
 
 ### HME
 
-| Backbone         | Representation         | Metric | Score |
+| Backbone         | Representation         |Mathwriting-2024 purity | CROHME 2019 purity |
 | ---------------- | ---------------------- | ------ | ----- |
-| ResNet34 + TrOCR | PCA-reduced embeddings | Purity | TBD   |
+| ResNet34 + TrOCR | PCA-reduced embeddings | TBD | TBD   |
+
+Note: evaluation on CROHME 2019 is done only to top 50 most common equations. This is to avoid potential blow up purity due to small member cluster (especially single member cluster).
 
 ### MCQ
 
 | Variant   | Backbone                               | Representation            | EMNIST Purity | Custom Dataset Purity |
 | --------- | -------------------------------------- | ------------------------- | ------------- | --------------------- |
-| Version 1 | ResNet18 + AttentionPooling            | Probabilities (Hellinger) | 0.9651           | 0.9751                   |
+| Version 1 | ResNet18 + AttentionPooling            | Probabilities (Hellinger) | 0.9652           | 0.9751                   |
 | Version 2 | ResNet18 + ProjectionHead + CenterLoss | Embeddings (cosine similarity space)                | 0.9641           | 0.9751                   |
 
 
@@ -137,4 +167,13 @@ python3 -m scripts.get_pretrained_weights.mcq
 ### HMESymbolic
 ```bash
 python3 -m scripts.get_pretrained_weights.hme
+```
+
+
+---
+## 📥 Getting public model (and strip + quantize)
+### TrOCR 
+reference: [arXiv:2109.10282](arXiv:2109.10282)
+```bash
+python3 -m scripts.get_public_model.trocr
 ```
