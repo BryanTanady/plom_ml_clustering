@@ -64,12 +64,12 @@ A longer version: [extended demo]()
 | **Datasets**               | **Train/Val:** same as v1 <br> **Test:** same as v1 |
 
 ---
-# 📊 Evaluation
+# 📊 Evaluation (Purity)
 
 ## **1️⃣ Handwritten Math Expression (HME) Clustering**
 
 
-| Backbone         | Representation         |Mathwriting-2024 purity | CROHME 2019 purity | Custom dataset purity |
+| Backbone         | Representation         |Mathwriting-2024 | CROHME 2019 | Custom dataset |
 | ---------------- | ---------------------- | ------ | ----- | ------ |
 | ResNet34 + TrOCR | PCA-reduced embeddings | TBD | TBD   | TBD |
 
@@ -77,13 +77,12 @@ Note: evaluation on CROHME 2019 is done only to top 50 most common equations. Th
 
 ## **2️⃣ Multiple-Choice Question (MCQ) Clustering**
 
-| Variant   | Backbone                               | Representation            | EMNIST Purity | Custom Dataset Purity |
+| Variant   | Backbone                               | Representation            | EMNIST | Custom dataset |
 | --------- | -------------------------------------- | ------------------------- | ------------- | --------------------- |
 | Version 1 | ResNet18 + AttentionPooling            | Probabilities (Hellinger) | 0.9652           | 0.9751                   |
 | Version 2 | ResNet18 + ProjectionHead + CenterLoss | Embeddings (cosine similarity space)                | 0.9641           | 0.9751                   |
 
 ---
-
 # 🚀 Getting Started
 
 ### Prerequisites
