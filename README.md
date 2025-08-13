@@ -1,5 +1,4 @@
-# plom\_ml\_clustering  <img style="vertical-align:middle" src="assets/favicon.ico" alt="Logo" width="40">
-
+# <img style="vertical-align:middle" src="assets/favicon.ico" alt="Logo" width="40">  plom\_ml\_clustering  
 Machine Learning clustering model architectures and training for the [Plom](https://github.com/plomgrading/plom) grading system. This repo **only** covers how to generate the models that generate embeddings, i.e the **red component (Model + Embedder)** in the following diagram:
 <p align="center">
   <img src="assets/inference_pipeline.png" width=800>
