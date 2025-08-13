@@ -19,7 +19,7 @@ These systems are designed for integration with Plom's grading workflow, enablin
   <img src="assets/plom_preview.gif" width=800>
 </p>
 
-A longer version: [extended demo]()
+A longer version: [extended demo](https://youtu.be/yW2fjkkPGSg)
 
 ---
 
@@ -123,7 +123,7 @@ python3 -m scripts.get_pretrained_weights.mcq
 ```bash
 python3 -m scripts.get_pretrained_weights.hme
 ```
->**Note:**  This model was trained with Normalization turned off in `train_tf`, so ensure there is no `transforms.Normalization(0.5, 0.5)`
+>**Note:**  This model was trained with Normalization turned off in `train_tf`, so ensure there is no `transforms.Normalization(0.5, 0.5)` upon inference.
 
 
 ---
