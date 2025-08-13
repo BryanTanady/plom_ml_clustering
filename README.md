@@ -1,6 +1,6 @@
 # plom\_ml\_clustering
 
-Machine Learning clustering model architectures and training for the [Plom](https://github.com/...) grading system.
+Machine Learning clustering model architectures and training for the [Plom](https://github.com/plomgrading/plom) grading system.
 
 
 As of Aug 2025 supports:
