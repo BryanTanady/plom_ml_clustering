@@ -72,7 +72,7 @@ A longer version: [extended demo]()
 | ---------------- | ---------------------- | ------ | ----- | ------ |
 | ResNet34 + TrOCR | PCA-reduced embeddings | TBD | TBD   | TBD |
 
-Note: evaluation on CROHME 2019 is done only to top 50 most common equations. This is to avoid potential blow up purity due to small member cluster (especially single member cluster).
+> **Note:** evaluation on CROHME 2019 is done only to top 50 most common equations. This is to avoid potential blow up purity due to small member cluster (especially single member cluster).
 
 ## **2️⃣ Multiple-Choice Question (MCQ) Clustering**
 
@@ -123,6 +123,7 @@ python3 -m scripts.get_pretrained_weights.mcq
 ```bash
 python3 -m scripts.get_pretrained_weights.hme
 ```
+>**Note:**  This model was trained with Normalization turned off in `train_tf`, so ensure there is no `transforms.Normalization(0.5, 0.5)`
 
 
 ---
