@@ -1,6 +1,6 @@
 # plom\_ml\_clustering
 
-Machine Learning clustering model architectures and training for the [Plom](https://github.com/plomgrading/plom) grading system. This repo **only** covers how to generate the models that generate embeddings, i.e the **red component (Model + Embeddor)** in the following diagram:
+Machine Learning clustering model architectures and training for the [Plom](https://github.com/plomgrading/plom) grading system. This repo **only** covers how to generate the models that generate embeddings, i.e the **red component (Model + Embedder)** in the following diagram:
 <p align="center">
   <img src="assets/inference_pipeline.png" width=800>
 </p>
@@ -62,6 +62,28 @@ A longer version: [extended demo]()
 | **Representation**         | L2-normalized projection head embeddings |
 | **Clustering Method**      | KMeans (k=11), Agglomerative on embeddings |
 | **Datasets**               | **Train/Val:** same as v1 <br> **Test:** same as v1 |
+
+---
+# 📊 Evaluation
+
+## **1️⃣ Handwritten Math Expression (HME) Clustering**
+
+
+| Backbone         | Representation         |Mathwriting-2024 purity | CROHME 2019 purity | Custom dataset purity |
+| ---------------- | ---------------------- | ------ | ----- | ------ |
+| ResNet34 + TrOCR | PCA-reduced embeddings | TBD | TBD   | TBD |
+
+Note: evaluation on CROHME 2019 is done only to top 50 most common equations. This is to avoid potential blow up purity due to small member cluster (especially single member cluster).
+
+## **2️⃣ Multiple-Choice Question (MCQ) Clustering**
+
+| Variant   | Backbone                               | Representation            | EMNIST Purity | Custom Dataset Purity |
+| --------- | -------------------------------------- | ------------------------- | ------------- | --------------------- |
+| Version 1 | ResNet18 + AttentionPooling            | Probabilities (Hellinger) | 0.9652           | 0.9751                   |
+| Version 2 | ResNet18 + ProjectionHead + CenterLoss | Embeddings (cosine similarity space)                | 0.9641           | 0.9751                   |
+
+
+@@ -137,4 +167,13 @@ python3 -m scripts.get_pretrained_weights.mcq
 
 ---
 
