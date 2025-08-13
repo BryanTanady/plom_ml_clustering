@@ -1,4 +1,4 @@
-# plom\_ml\_clustering <img src="assets/plomLogo.png" alt="Logo" width="100"/> 
+# plom\_ml\_clustering <img src="assets/plomLogo.png" alt="Logo" width="90" style="background-color:white; padding:5px; border-radius:6px; vertical-align:middle;">
 
 Machine Learning clustering model architectures and training for the [Plom](https://github.com/plomgrading/plom) grading system. This repo **only** covers how to generate the models that generate embeddings, i.e the **red component (Model + Embedder)** in the following diagram:
 <p align="center">
