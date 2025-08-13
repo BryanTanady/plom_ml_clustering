@@ -12,6 +12,15 @@ These systems are designed for integration with Plom's grading workflow, enablin
 
 ---
 
+## 👁️ Preview of Integration with Plom
+<p align="center">
+  <img src="assets/plom_preview.gif" width=800>
+</p>
+
+A longer version: [extended demo]()
+
+---
+
 ## 🧠 Systems Overview
 
 ### 1. HME Clustering
@@ -118,3 +127,14 @@ python3 -m training.MCQ1_training.py # Trained with clustering in mind (CenterLo
 
 
 ---
+## 📥 Getting pretrained weights
+
+### MCQ (V1)
+```bash
+python3 -m scripts.get_pretrained_weights.mcq
+```
+
+### HMESymbolic
+```bash
+python3 -m scripts.get_pretrained_weights.hme
+```
