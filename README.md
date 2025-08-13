@@ -82,9 +82,6 @@ Note: evaluation on CROHME 2019 is done only to top 50 most common equations. Th
 | Version 1 | ResNet18 + AttentionPooling            | Probabilities (Hellinger) | 0.9652           | 0.9751                   |
 | Version 2 | ResNet18 + ProjectionHead + CenterLoss | Embeddings (cosine similarity space)                | 0.9641           | 0.9751                   |
 
-
-@@ -137,4 +167,13 @@ python3 -m scripts.get_pretrained_weights.mcq
-
 ---
 
 # 🚀 Getting Started
