@@ -252,7 +252,7 @@ def main():
 
     # Train
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--epochs", type=int, default=70)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--num-workers", type=int, default=6)
     parser.add_argument("--seed", type=int, default=42)

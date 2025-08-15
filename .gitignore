@@ -3,3 +3,6 @@ dataset
 playground
 *pth
 *pycache*
+*.onnx
+*.bin
+*.data
