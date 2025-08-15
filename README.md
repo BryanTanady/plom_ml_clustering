@@ -76,8 +76,8 @@ A longer version: [extended demo](https://youtu.be/yW2fjkkPGSg)
 
 The following figures show the tSNE projection of the merged embeddings in the custom dataset.
 <p align="center">
-  <img src="assets/tsne.png" width=700>
-  <img src="assets/tsne_labelled.png" width=700>
+  <img src="assets/tsne.png" width=500>
+  <img src="assets/tsne_labelled.png" width=500>
 
 </p>
 
