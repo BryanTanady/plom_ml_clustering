@@ -70,7 +70,7 @@ A longer version: [extended demo](https://youtu.be/yW2fjkkPGSg)
 
 | Backbone         | Representation         |Mathwriting-2024 | CROHME 2019 | Custom dataset |
 | ---------------- | ---------------------- | ------ | ----- | ------ |
-| ResNet34 + TrOCR | PCA-reduced embeddings | TBD | TBD   | 0.9528 |
+| ResNet34 + TrOCR | PCA-reduced embeddings | 0.8955 | 0.9788   | 0.9528 |
 
 > **Note:** evaluation on CROHME 2019 is done only to top 50 most common equations. This is to avoid potential blow up purity due to small member cluster (especially single member cluster).
 
