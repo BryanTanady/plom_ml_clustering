@@ -72,7 +72,7 @@ A longer version: [extended demo](https://youtu.be/yW2fjkkPGSg)
 | ---------------- | ---------------------- | ------ | ----- | ------ |
 | ResNet34 + TrOCR | PCA-reduced embeddings | 0.8955 | 0.9788   | 0.9528 |
 
-> **Note:** evaluation on CROHME 2019 is done only to top 50 most common equations. This is to avoid potential blow up purity due to small member cluster (especially single member cluster).
+> **Note:** evaluation on Mathwriting-2024 is done to top 200 most common equations while CROHME 2019 is done to top 50. This is to avoid having a single-member cluster that may mess up purity score.
 
 The following figures show the tSNE projection of the merged embeddings in the custom dataset.
 <p align="center">
