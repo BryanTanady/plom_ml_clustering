@@ -26,8 +26,9 @@ class _ProjectionHead(nn.Module):
             nn.ReLU(),
             nn.Linear(emb_dim, emb_dim),
         )
-        self.classifier = nn.Linear(emb_dim, num_classes, bias=False)
+        self.classifier = nn.Linear(emb_dim, num_classes)
         nn.init.normal_(self.classifier.weight, std=0.01)
+        nn.init.constant_(self.classifier.bias, 0)
 
     def forward(self, features: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         emb = self.projector(features)
@@ -155,7 +156,6 @@ class MCQClusteringNet2(nn.Module):
         """
         features = self.backbone(x)
         return self.head(features)
-
 
 
 class HMESymbolicNet(nn.Module):
