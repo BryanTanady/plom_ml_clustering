@@ -48,7 +48,7 @@ A longer version: [extended demo](https://youtu.be/yW2fjkkPGSg)
 | **Model Architecture**     | ResNet-18 backbone (ImageNet-pretrained, grayscale) + AttentionPooling + 11-class head |
 | **Training**               | Supervised classification; Loss: cross-entropy |
 | **Representation**         | Softmax probability vectors + optional temperature scaling + Hellinger transform |
-| **Clustering Method**      |  Agglomerative on probability vectors |
+| **Clustering Method**      |  Agglomerative on probability vectors (Transformed to Hellinger space)|
 | **Datasets**               | **Train/Val:** [EMNIST ByClass](https://www.nist.gov/itl/products-and-services/emnist-dataset) filtered + augmentation <br> **Test:** Custom handwritten MCQ dataset |
 
 ### MCQ v2 — *Projection Head + Center Loss*
@@ -140,3 +140,7 @@ reference: [arXiv:2109.10282](arXiv:2109.10282)
 ```bash
 python3 -m scripts.get_public_model.trocr
 ```
+
+---
+# 📜 Acknowledgement
+This work was conducted at The University of British Columbia (UBC), supported and supervised by the [Plom](https://gitlab.com/plom/plom)  project team.
