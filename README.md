@@ -70,9 +70,16 @@ A longer version: [extended demo](https://youtu.be/yW2fjkkPGSg)
 
 | Backbone         | Representation         |Mathwriting-2024 | CROHME 2019 | Custom dataset |
 | ---------------- | ---------------------- | ------ | ----- | ------ |
-| ResNet34 + TrOCR | PCA-reduced embeddings | TBD | TBD   | TBD |
+| ResNet34 + TrOCR | PCA-reduced embeddings | TBD | TBD   | 0.9528 |
 
 > **Note:** evaluation on CROHME 2019 is done only to top 50 most common equations. This is to avoid potential blow up purity due to small member cluster (especially single member cluster).
+
+The following figures show the tSNE projection of the merged embeddings in the custom dataset.
+<p align="center">
+  <img src="assets/tsne.png" width=700>
+  <img src="assets/tsne_labelled.png" width=700>
+
+</p>
 
 ## **2️⃣ Multiple-Choice Question (MCQ) Clustering**
 
