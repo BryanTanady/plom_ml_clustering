@@ -30,10 +30,10 @@ A longer version: [extended demo](https://youtu.be/yW2fjkkPGSg)
 | Aspect                     | Details |
 |----------------------------|---------|
 | **Goal**                   | Cluster handwritten math expressions by **structural and semantic content** |
-| **Model Architecture**     | ResNet-34 feature extractor (HMESymbolicNet) + TrOCR encoder for symbolic representation (Public model) |
+| **Model Architecture**     | ResNet-34 feature extractor (HMESymbolicNet)  |
 | **Training**               | Supervised training on Multi-hot symbol labels with BCELogitLoss and weight shifted to rarer symbols for better long-tailed dataset |
 | **Representation**         | Pooled encoder embeddings, L2-normalized |
-| **Clustering Method**      | Agglomerative on  embeddings produced by both models |
+| **Clustering Method**      | Agglomerative on  embeddings produced by customly trained model + (TrOCR)[https://huggingface.co/fhswf/TrOCR_Math_handwritten] encoder|
 | **Datasets**               | **Train/Val:** [Mathwriting-2024](https://arxiv.org/abs/2404.10690) <br> **Test:** [CROHME 2019](https://tc11.cvc.uab.es/datasets/ICDAR2019-CROHME-TDF_1%7D), custom dataset |
 
 > The [TrOCR](https://huggingface.co/fhswf/TrOCR_Math_handwritten) model is a model for handwritten math expression OCR. To adopt for plom, we strip the transformer's encoder (quantized it) then use it for feature extraction.
