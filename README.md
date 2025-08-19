@@ -36,7 +36,7 @@ A longer version: [extended demo](https://youtu.be/yW2fjkkPGSg)
 | **Clustering Method**      | Agglomerative on  embeddings produced by both models |
 | **Datasets**               | **Train/Val:** [Mathwriting-2024](https://arxiv.org/abs/2404.10690) <br> **Test:** [CROHME 2019](https://tc11.cvc.uab.es/datasets/ICDAR2019-CROHME-TDF_1%7D), custom dataset |
 
-> The [TrOCR](https://huggingface.co/fhswf/TrOCR_Math_handwritten) model is a model used to do OCR of handwritten math expression. To adopt for plom, we extract only the encoder and quantize it into fp16.
+> The [TrOCR](https://huggingface.co/fhswf/TrOCR_Math_handwritten) model is a model used to do OCR of handwritten math expression. To adopt for plom, we strip the transformer's encoder (quantized it) then use it for feature extraction.
 ---
 
 ## **2️⃣ Multiple-Choice Question (MCQ) Clustering**
